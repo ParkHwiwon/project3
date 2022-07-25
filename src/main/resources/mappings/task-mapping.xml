@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="TaskDAO">
+
+	<resultMap id="subjectResult" type="subject">
+		<id property="subjectCode" column="subjectCode" />
+		<result property="lessonName" column="lessonName" />
+	</resultMap>
+	
+	<resultMap id="taskResult" type="task">
+        <id property="seq" column="seq" />
+        <result property="title" column="title" />
+        <result property="writer" column="writer" />
+        <result property="content" column="content" />
+        <result property="fileName" column="fileName" />
+        <result property="fileSize" column="fileSize" />
+        <result property="writeDate" column="writeDate" />
+        <result property="updateDate" column="updateDate" />
+        <result property="originalFileName" column="originalFileName" />
+        <result property="subjectCode" column="subjectCode" />
+        <result property="taskDeadline" column="taskDeadline" />
+        <result property="submit" column="submit" />
+        <result property="totalSubmit" column="totalSubmit" />
+        <result property="totalStudent" column="totalStudent" />
+        <result property="scored" column="scored" />
+        <collection property="lessonName" resultMap="subjectResult"/>
+        <collection property="taskSubmit" resultMap="taskSubmitResult"/>
+	</resultMap>
+	
+	<resultMap id="taskSubmitResult" type="taskSubmit">
+        <id property="seq" column="seq" />
+        <result property="writer" column="writer" />
+        <result property="fileName" column="fileName" />
+        <result property="fileSize" column="fileSize" />
+        <result property="writeDate" column="writeDate" />
+        <result property="originalFileName" column="originalFileName" />
+        <result property="parent" column="parent" />
+        <result property="score" column="score" />
+	</resultMap>
+	
+	<resultMap id="userResult" type="user">
+		<id property="userId" column="userId" />
+		<result property="auth" column="auth" />
+	</resultMap>
+
+
+	<!-- 게시판 글 작성 sql문 -->
+	<insert id="insertTask" parameterType="task">
+		<![CDATA[
+		INSERT INTO task
+		(title, writer, content, fileName, fileSize, originalFileName,subjectCode,taskDeadline)
+		VALUES
+		(#{title}, #{writer}, #{content}, #{fileName}, #{fileSize}, 
+		#{originalFileName},#{subjectCode},#{taskDeadline})
+		]]>
+	</insert>
+	
+	<insert id="insertTaskSubmit" parameterType="hashmap">
+		<![CDATA[
+		INSERT task_submit(parent,writer,fileName,originalFileName,fileSize) 
+		VALUES(#{taskSubmit.parent},#{user.userId},#{taskSubmit.fileName},#{taskSubmit.originalFileName},#{taskSubmit.fileSize})
+		]]>
+	</insert>
+	
+	<!-- 파일은 수정하지 못하도록 할 예정 
+		수정 날짜는 트리거를 활용할 예정 -->
+	<update id="updateTask">
+		<![CDATA[
+		UPDATE task SET
+		title = #{title},
+		content = #{content},
+		fileName = #{fileName},
+		fileSize = #{fileSize},
+		originalFileName = #{originalFileName},
+		taskDeadline = #{taskDeadline} 
+		WHERE seq = #{seq}
+		]]>
+	</update>
+	
+	<update id="updateTaskSubmit">
+		<![CDATA[
+		UPDATE task_submit
+		SET 
+		fileName=#{fileName},
+		originalFileName=#{originalFileName},
+		fileSize=#{fileSize},
+		writeDate=current_timestamp
+		WHERE seq = #{seq}
+		]]>
+	</update>
+
+	<delete id="deleteTask">
+		<![CDATA[
+		DELETE from task 
+		WHERE seq = #{seq}
+		]]>
+	</delete>
+
+	<select id="getTaskSubmit_p" parameterType="task" resultMap="taskSubmitResult">
+		<![CDATA[
+		SELECT * FROM task_submit 
+		WHERE parent=#{seq}
+		]]>
+	</select>
+	
+	<select id="getTaskSubmit_s" parameterType="hashmap" resultType="taskSubmit">
+		<![CDATA[
+		SELECT * FROM task_submit 
+		WHERE parent=#{task.seq} 
+		AND writer=#{user.userId}
+		]]>
+	</select>
+	
+	<select id="getTask" resultType="task">
+		<![CDATA[
+		SELECT * FROM task
+		WHERE seq=#{seq}
+		]]>
+	</select>
+
+	<!-- 모든 과목의 과제 리스트(미제출) -->
+	<select id="getTaskList" parameterType="user" resultMap="taskResult">
+		<![CDATA[
+		SELECT e.seq,e.lessonName,e.title,e.taskDeadline,COUNT(f.parent) submit, e.subjectCode FROM 
+		(SELECT c.seq,d.lessonName,c.title,c.taskDeadline,c.subjectCode FROM 
+			(SELECT b.seq,b.title,b.subjectCode,b.taskDeadline FROM 
+				(SELECT subjectCode FROM subjectgrade WHERE userId=#{userId}) a
+			LEFT OUTER JOIN task b ON a.subjectCode=b.subjectCode) c 
+		LEFT OUTER JOIN subject d ON c.subjectCode=d.subjectCode) e 
+		LEFT OUTER JOIN
+		(SELECT parent FROM task_submit WHERE writer=#{userId}) f 
+		ON e.seq=f.parent
+	    GROUP BY e.seq HAVING submit=0 ORDER BY e.taskDeadline IS NULL ASC;
+		]]>
+	</select>
+	<!-- 특정 과목의 과제 리스트(학생) -->
+	<select id="getSubjectTaskList_s" parameterType="hashmap" resultMap="taskResult">
+		<![CDATA[
+		SELECT a.seq,a.title,a.taskDeadline,IF(COUNT(b.parent)=1,'제출','미제출') submit FROM 
+		(SELECT * FROM task WHERE subjectCode=#{task.subjectCode}) a 
+		LEFT OUTER JOIN 
+		(SELECT parent FROM task_submit WHERE writer=#{user.userId}) b 
+		ON a.seq=b.parent
+		GROUP BY a.seq 
+		HAVING IF(#{task.submit}='all' OR #{task.submit} IS NULL,submit LIKE "%%",submit=#{task.submit})
+		ORDER BY a.seq DESC
+		]]>
+	</select>
+	<!-- 특정 과목의 과제 리스트(교수) -->
+	<select id="getSubjectTaskList_p" parameterType="task" resultMap="taskResult">
+		<![CDATA[
+		SELECT c.seq,c.title,c.taskDeadline,c.totalSubmit,c.scored,d.totalStudent FROM
+		(SELECT b.seq,b.title,b.taskDeadline,
+			IFNULL(a.totalSubmit,0) totalSubmit,IFNULL(a.scored,0) scored, b.subjectCode FROM 
+		v_totalSubmit a RIGHT OUTER JOIN task b ON a.seq=b.seq) c 
+		LEFT OUTER JOIN v_totalStudent d 
+		ON c.subjectCode=d.subjectCode 
+		WHERE c.subjectCode=#{subjectCode} AND
+		IF(#{submit}='all' OR #{submit} IS NULL,c.totalSubmit LIKE "%%",
+		IF(#{submit}='scored',c.totalSubmit=d.totalStudent,c.totalSubmit!=d.totalStudent))
+		ORDER BY seq DESC
+		]]>
+	</select>
+
+</mapper>

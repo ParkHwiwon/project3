@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="LessonDAO">
+
+	<resultMap id="lessonResult" type="lesson">
+		<id property="lessonSeq" column="lessonSeq" />							<!-- 강의 번호 -->
+		<result property="subjectCode" column="subjectCode" />					<!-- 강의코드 -->
+		<result property="lessonWeek" column="lessonWeek" />					<!-- 강의주차 -->
+		<result property="topicCount" column="topicCount" />					<!-- 강의차시 -->
+		<result property="lessonDeadline" column="lessonDeadline" />			<!-- 강의열람기간 -->
+		<result property="lessonUrl" column="lessonUrl" />						<!-- 강의Url -->
+		<result property="lessonOpen" column="lessonOpen" />					<!-- 강의오픈기간 -->
+		<result property="lessonContent" column="lessonContent" />				<!-- 강의내용 -->
+	</resultMap>
+	
+	<!-- 강의 추가하기 -->
+	<insert id="insertLesson" parameterType="lesson">
+		<![CDATA[
+		insert into lesson
+		(subjectCode, lessonWeek, topicCount, lessonName, lessonDeadline, lessonUrl, lessonOpen, lessonContent)
+		values(#{subjectCode}, #{lessonWeek}, #{topicCount}, #{lessonName}, #{lessonDeadline}, #{lessonUrl}, #{lessonOpen}, #{lessonContent})
+		]]>
+	</insert>
+
+	
+
+	<!-- 강의 리스트보기 -->
+	<select id="getLessonList" resultMap="lessonResult">
+	<![CDATA[
+		SELECT * FROM lesson 
+		where subjectCode = #{subjectCode} 
+		ORDER BY lessonWeek, topicCount
+		]]>
+	</select>
+
+	<!-- 강의 불러오기 상세페이지 -->
+	<select id="getLesson" resultType="lesson">
+		<![CDATA[
+			SELECT * FROM lesson 
+			where lessonSeq = #{lessonSeq}
+		]]>	
+	</select>
+	
+	<!-- 강의삭제 -->
+	<delete id="deleteLesson" parameterType="lesson">
+	<![CDATA[
+		DELETE lesson 
+		WHERE lessonSeq = #{lessonSeq}
+	]]>
+	</delete>
+
+	<update id="updateLesson" parameterType="Lesson">
+		<![CDATA[
+			UPDATE lesson SET 
+			lessonname = #{lessonName}
+			lessonUrl = #{lessonUrl}
+			lessonContent = #{lessonContent}
+			WHERE lessonSeq = #{lessonSeq} 
+		]]>
+	</update>
+
+</mapper>
